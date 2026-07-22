@@ -1,0 +1,28 @@
+.login-form {
+  max-width: 33%;
+  margin: 70px auto 0;
+}
+
+.login-form-margin {
+  margin-bottom: 16px;
+}
+
+.login-form-forgot {
+  float: right;
+}
+
+.login-form-button {
+  width: 33%;
+  margin: 0 auto;
+  display: flex;
+  text-align: center;
+  justify-content: center;
+  text-transform: uppercase;
+  border-radius: 6px;
+  background-color: #212529;
+  border: unset !important;
+}
+
+input {
+  height: 33px;
+}
