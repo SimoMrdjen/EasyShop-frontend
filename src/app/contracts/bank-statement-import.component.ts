@@ -12,6 +12,7 @@ import { NzCardModule } from 'ng-zorro-antd/card';
 import {
   BankStatementService, BankImportRow,
   BANK_TRANSACTION_STATUS_LABELS, BANK_TRANSACTION_STATUS_COLORS,
+  PAYER_NAME_CHECK_LABELS, PAYER_NAME_CHECK_COLORS,
 } from '../services/bank-statement.service';
 
 @Component({
@@ -62,6 +63,8 @@ import {
                 <th>Ugovor</th>
                 <th>Rata</th>
                 <th>Kupac</th>
+                <th>Provera imena</th>
+                <th title="Sirov tekst transakcije iz izvoda">Iz izvoda</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -76,6 +79,16 @@ import {
                 <td>{{ row.contractId ?? '—' }}</td>
                 <td>{{ row.installmentOrdinal ?? '—' }}</td>
                 <td>{{ row.customerFullName ?? '—' }}</td>
+                <td>
+                  <nz-tag *ngIf="row.payerNameCheck" [nzColor]="nameCheckColor(row.payerNameCheck)">
+                    {{ nameCheckLabel(row.payerNameCheck) }}
+                  </nz-tag>
+                  <span *ngIf="!row.payerNameCheck">—</span>
+                </td>
+                <td style="max-width:220px; font-size:11px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                  [title]="row.description">
+                  {{ row.description }}
+                </td>
                 <td>
                   <nz-tag [nzColor]="statusColor(row.status)">{{ statusLabel(row.status) }}</nz-tag>
                 </td>
@@ -95,6 +108,8 @@ export class BankStatementImportComponent {
 
   readonly statusLabel = (s: string) => BANK_TRANSACTION_STATUS_LABELS[s as keyof typeof BANK_TRANSACTION_STATUS_LABELS] ?? s;
   readonly statusColor = (s: string) => BANK_TRANSACTION_STATUS_COLORS[s as keyof typeof BANK_TRANSACTION_STATUS_COLORS] ?? 'default';
+  readonly nameCheckLabel = (s: string) => PAYER_NAME_CHECK_LABELS[s as keyof typeof PAYER_NAME_CHECK_LABELS] ?? s;
+  readonly nameCheckColor = (s: string) => PAYER_NAME_CHECK_COLORS[s as keyof typeof PAYER_NAME_CHECK_COLORS] ?? 'default';
 
   constructor(
     private bankStatementService: BankStatementService,
@@ -109,7 +124,11 @@ export class BankStatementImportComponent {
     this.bankStatementService.preview(file as unknown as File).subscribe({
       next: rows => {
         this.rows = rows;
-        this.selectedIds = new Set(rows.filter(r => r.status === 'PROPOSED_MATCH').map(r => r.id));
+        // Ne biramo automatski redove gde se ime platioca ne poklapa sa kupcem -
+        // zaposleni treba svesno da pregleda i potvrdi te slucajeve.
+        this.selectedIds = new Set(
+          rows.filter(r => r.status === 'PROPOSED_MATCH' && r.payerNameCheck !== 'MISMATCH').map(r => r.id)
+        );
         this.loading = false;
       },
       error: err => {

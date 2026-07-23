@@ -6,6 +6,8 @@ import { environment } from '../../environments/environment';
 export type BankTransactionStatus =
   'PROPOSED_MATCH' | 'CONFIRMED' | 'NO_REFERENCE' | 'INVALID_REFERENCE' | 'UNKNOWN_CONTRACT' | 'ALREADY_PAID';
 
+export type PayerNameCheck = 'MATCH' | 'PARTIAL' | 'MISMATCH';
+
 export interface BankImportRow {
   id: number;
   bankName: string;
@@ -16,7 +18,20 @@ export interface BankImportRow {
   contractId?: number;
   installmentOrdinal?: number;
   customerFullName?: string;
+  payerNameCheck?: PayerNameCheck;
 }
+
+export const PAYER_NAME_CHECK_LABELS: Record<PayerNameCheck, string> = {
+  MATCH: 'Ime se poklapa',
+  PARTIAL: 'Delimično poklapanje imena',
+  MISMATCH: 'Ime se ne poklapa - proveri!',
+};
+
+export const PAYER_NAME_CHECK_COLORS: Record<PayerNameCheck, string> = {
+  MATCH: 'green',
+  PARTIAL: 'orange',
+  MISMATCH: 'red',
+};
 
 export const BANK_TRANSACTION_STATUS_LABELS: Record<BankTransactionStatus, string> = {
   PROPOSED_MATCH: 'Predlog za evidentiranje',
