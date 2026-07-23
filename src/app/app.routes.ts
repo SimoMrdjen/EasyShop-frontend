@@ -70,5 +70,10 @@ export const routes: Routes = [
     loadComponent: () => import('./contracts/daily-report.component').then(m => m.DailyReportComponent),
     canActivate: [employeeOrAdminGuard]
   },
+  {
+    path: 'bank-statements/import',
+    loadComponent: () => import('./contracts/bank-statement-import.component').then(m => m.BankStatementImportComponent),
+    canActivate: [employeeOrAdminGuard]
+  },
   { path: '**', redirectTo: 'login' },
 ];

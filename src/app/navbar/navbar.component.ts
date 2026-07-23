@@ -69,6 +69,10 @@ import { NzAvatarModule } from 'ng-zorro-antd/avatar';
             <span nz-icon nzType="bar-chart"></span>
             Dnevni izveštaj
           </li>
+          <li nz-menu-item routerLink="/bank-statements/import">
+            <span nz-icon nzType="bank"></span>
+            Uvoz izvoda
+          </li>
         </ng-container>
 
         <li class="spacer"></li>
