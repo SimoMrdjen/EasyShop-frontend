@@ -65,9 +65,19 @@ function fmtDateTime(d: Date): string {
         <div class="sep"></div>
 
         <div class="row"><span>Iznos rate:</span><span>{{ fmt(installment.installmentAmount) }}</span></div>
-        <div class="row"><span>Uplaćeno:</span><span class="bold">{{ fmt(installment.paidAmount) }} din.</span></div>
+        <div class="row"><span>Uplaćeno na ovu ratu:</span><span class="bold">{{ fmt(installment.paidAmount) }} din.</span></div>
         <div class="row"><span>Način plaćanja:</span><span>{{ methodLabel(installment.paymentMethod) }}</span></div>
         <div class="row"><span>Datum uplate:</span><span>{{ fmtDate(installment.paymentDate) }}</span></div>
+
+        <ng-container *ngIf="affectedInstallments.length > 1">
+          <div class="sep"></div>
+          <div class="row"><span>Ukupno uplaćeno:</span><span class="bold">{{ fmt(totalPaidThisTransaction) }} din.</span></div>
+          <div class="center small" style="margin-top:4px;">Uplata pokriva više rata:</div>
+          <div class="row" *ngFor="let ai of affectedInstallments">
+            <span>Rata {{ ai.installmentOrdinal }} {{ ai.status === 'PARTIAL' ? '(delimično)' : '' }}:</span>
+            <span>{{ fmt(ai.paidAmount) }} din.</span>
+          </div>
+        </ng-container>
 
         <div class="sep"></div>
 
@@ -139,6 +149,8 @@ function fmtDateTime(d: Date): string {
 export class InstallmentReceiptComponent implements OnInit {
   contract: ContractResponse | null = null;
   installment: InstallmentResponse | null = null;
+  affectedInstallments: InstallmentResponse[] = [];
+  totalPaidThisTransaction = 0;
   printedAt = fmtDateTime(new Date());
 
   readonly PRODAVAC = PRODAVAC;
@@ -159,8 +171,40 @@ export class InstallmentReceiptComponent implements OnInit {
       next: contract => {
         this.contract = contract;
         this.installment = contract.installments.find(i => i.id === installmentId) ?? null;
+        this.affectedInstallments = this.computeAffectedInstallments();
+        this.totalPaidThisTransaction = this.affectedInstallments
+          .reduce((sum, i) => sum + (i.paidAmount ?? 0), 0);
       }
     });
+  }
+
+  /**
+   * Kad uplata predje iznos rate, visak se automatski prenosi na narednu ratu
+   * (ili vise njih). Ova funkcija prepoznaje koje su rate obuhvacene ISTOM
+   * uplatom kao kliknuta rata - krecuci od nje unapred, dokle god naredna rata
+   * ima isti datum i nacin placanja i stvarno je dotaknuta tom uplatom.
+   */
+  private computeAffectedInstallments(): InstallmentResponse[] {
+    if (!this.contract || !this.installment) return [];
+
+    const sorted = [...this.contract.installments].sort((a, b) => a.installmentOrdinal - b.installmentOrdinal);
+    const startIdx = sorted.findIndex(i => i.id === this.installment!.id);
+    if (startIdx === -1) return [this.installment];
+
+    const start = sorted[startIdx];
+    const group = [start];
+
+    for (let idx = startIdx + 1; idx < sorted.length; idx++) {
+      const next = sorted[idx];
+      const touchedBySamePayment =
+        next.paymentDate === start.paymentDate &&
+        next.paymentMethod === start.paymentMethod &&
+        next.paidAmount != null && next.paidAmount > 0;
+      if (!touchedBySamePayment) break;
+      group.push(next);
+    }
+
+    return group;
   }
 
   methodLabel(m: PaymentMethod | undefined): string {

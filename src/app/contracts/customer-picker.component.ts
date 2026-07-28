@@ -1,11 +1,11 @@
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzInputModule } from 'ng-zorro-antd/input';
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzButtonModule } from 'ng-zorro-antd/button';
-import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { UserService } from '../services/user.service';
 import { UserResponse } from '../models/user.model';
@@ -13,20 +13,23 @@ import { UserResponse } from '../models/user.model';
 @Component({
   selector: 'app-customer-picker',
   standalone: true,
-  imports: [CommonModule, NzTableModule, NzInputModule, NzFormModule, NzIconModule, NzButtonModule],
+  imports: [CommonModule, FormsModule, NzTableModule, NzInputModule, NzFormModule, NzIconModule, NzButtonModule],
   template: `
     <div>
-      <nz-form-item style="max-width:360px; margin-bottom:16px;">
+      <nz-form-item style="max-width:420px; margin-bottom:16px;">
         <nz-form-control>
-          <nz-input-group [nzPrefix]="prefixIcon">
-            <input nz-input placeholder="Pretraži kupce po prezimenu..." (input)="onSearch($event)" />
+          <nz-input-group nzCompact style="display:flex;">
+            <input nz-input placeholder="Unesi prezime kupca..." [(ngModel)]="searchTerm"
+              (keyup.enter)="search()" style="flex:1;" />
+            <button nz-button nzType="primary" (click)="search()" [nzLoading]="loading">
+              <span nz-icon nzType="search"></span> Pretraži
+            </button>
           </nz-input-group>
-          <ng-template #prefixIcon><span nz-icon nzType="search"></span></ng-template>
         </nz-form-control>
       </nz-form-item>
 
       <nz-table [nzData]="customers" nzBordered [nzLoading]="loading" nzSize="middle"
-        [nzNoResult]="searched ? 'Nema rezultata pretrage' : 'Ukucaj prezime kupca za pretragu'">
+        [nzNoResult]="searched ? 'Nema rezultata pretrage' : 'Unesi prezime kupca i klikni Pretraži'">
         <thead>
           <tr>
             <th>Ime i prezime</th>
@@ -59,34 +62,29 @@ import { UserResponse } from '../models/user.model';
     .customer-row:hover td { background: #e6f4ff; }
   `]
 })
-export class CustomerPickerComponent implements OnInit {
+export class CustomerPickerComponent {
   @Output() customerSelected = new EventEmitter<UserResponse>();
 
   customers: UserResponse[] = [];
   loading = false;
   searched = false;
-  private search$ = new Subject<string>();
+  searchTerm = '';
 
   constructor(private userService: UserService) {}
 
-  ngOnInit(): void {
-    this.search$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(q => {
-      if (q.trim()) {
-        this.searched = true;
-        this.loading = true;
-        this.userService.searchCustomers(q).subscribe({
-          next: res => { this.customers = res; this.loading = false; },
-          error: () => { this.loading = false; }
-        });
-      } else {
-        this.searched = false;
-        this.customers = [];
-      }
+  search(): void {
+    const q = this.searchTerm.trim();
+    if (!q) {
+      this.searched = false;
+      this.customers = [];
+      return;
+    }
+    this.searched = true;
+    this.loading = true;
+    this.userService.searchCustomers(q).subscribe({
+      next: res => { this.customers = res; this.loading = false; },
+      error: () => { this.loading = false; }
     });
-  }
-
-  onSearch(event: Event): void {
-    this.search$.next((event.target as HTMLInputElement).value);
   }
 
   select(customer: UserResponse): void {

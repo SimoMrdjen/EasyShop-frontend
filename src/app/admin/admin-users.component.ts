@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, Validators, FormGroup } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, FormGroup } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzButtonModule } from 'ng-zorro-antd/button';
@@ -27,7 +27,7 @@ import { parseIdCardText, transliterateAndTitleCase } from '../utils/id-card-rea
   selector: 'app-admin-users',
   standalone: true,
   imports: [
-    CommonModule, ReactiveFormsModule,
+    CommonModule, FormsModule, ReactiveFormsModule,
     NzTableModule, NzButtonModule, NzFormModule,
     NzInputModule, NzSelectModule, NzModalModule, NzIconModule,
     NzCardModule, NzDividerModule, NzTagModule, NzEmptyModule,
@@ -185,14 +185,20 @@ import { parseIdCardText, transliterateAndTitleCase } from '../utils/id-card-rea
         [nzMessage]="'Podaci za ' + lastActionCustomer.firstName + ' ' + lastActionCustomer.lastName + ' su ažurirani.'"
         [nzAction]="createContractAction" (nzOnClose)="lastActionCustomer = null" nzCloseable>
       </nz-alert>
-      <nz-form-item style="max-width: 320px; margin-bottom: 16px;">
+      <nz-form-item style="max-width: 420px; margin-bottom: 16px;">
         <nz-form-control>
-          <input nz-input placeholder="Ukucaj prezime kupca za pretragu..." (input)="onCustomerSearch($event)" />
+          <nz-input-group nzCompact style="display:flex;">
+            <input nz-input placeholder="Unesi prezime kupca..." [(ngModel)]="customerSearchTerm"
+              (keyup.enter)="searchCustomers()" style="flex:1;" />
+            <button nz-button nzType="primary" (click)="searchCustomers()" [nzLoading]="loadingCustomers">
+              <span nz-icon nzType="search"></span> Pretraži
+            </button>
+          </nz-input-group>
         </nz-form-control>
       </nz-form-item>
 
       <nz-table [nzData]="customers" nzBordered [nzLoading]="loadingCustomers" nzSize="middle"
-        [nzNoResult]="customerSearched ? 'Nema rezultata pretrage' : 'Ukucaj prezime kupca za pretragu'">
+        [nzNoResult]="customerSearched ? 'Nema rezultata pretrage' : 'Unesi prezime kupca i klikni Pretraži'">
         <thead>
           <tr>
             <th>Ime i prezime</th>
@@ -367,6 +373,7 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   loadingCustomers = false;
   loadingEmployees = false;
   customerSearched = false;
+  customerSearchTerm = '';
 
   editModalVisible = false;
   editSaving = false;
@@ -374,7 +381,6 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
   lastActionCustomer: UserResponse | null = null;
   readingCard = false;
 
-  private customerSearch$ = new Subject<string>();
   private employeeSearch$ = new Subject<string>();
   private subs = new Subscription();
 
@@ -428,22 +434,6 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     );
 
     this.subs.add(
-      this.customerSearch$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(q => {
-        if (q.trim()) {
-          this.customerSearched = true;
-          this.loadingCustomers = true;
-          this.userService.searchCustomers(q).subscribe({
-            next: res => { this.customers = res; this.loadingCustomers = false; },
-            error: () => { this.loadingCustomers = false; }
-          });
-        } else {
-          this.customerSearched = false;
-          this.customers = [];
-        }
-      })
-    );
-
-    this.subs.add(
       this.employeeSearch$.pipe(debounceTime(300), distinctUntilChanged()).subscribe(q => {
         if (q.trim()) {
           this.loadingEmployees = true;
@@ -470,8 +460,19 @@ export class AdminUsersComponent implements OnInit, OnDestroy {
     });
   }
 
-  onCustomerSearch(event: Event): void {
-    this.customerSearch$.next((event.target as HTMLInputElement).value);
+  searchCustomers(): void {
+    const q = this.customerSearchTerm.trim();
+    if (!q) {
+      this.customerSearched = false;
+      this.customers = [];
+      return;
+    }
+    this.customerSearched = true;
+    this.loadingCustomers = true;
+    this.userService.searchCustomers(q).subscribe({
+      next: res => { this.customers = res; this.loadingCustomers = false; },
+      error: () => { this.loadingCustomers = false; }
+    });
   }
 
   onEmployeeSearch(event: Event): void {

@@ -1,11 +1,16 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { Router, RouterModule } from '@angular/router';
 import { NzMenuModule } from 'ng-zorro-antd/menu';
 import { NzLayoutModule } from 'ng-zorro-antd/layout';
 import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzDropDownModule } from 'ng-zorro-antd/dropdown';
 import { NzAvatarModule } from 'ng-zorro-antd/avatar';
+import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+import { NzNotificationService } from 'ng-zorro-antd/notification';
+
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-navbar',
@@ -18,6 +23,7 @@ import { NzAvatarModule } from 'ng-zorro-antd/avatar';
     NzIconModule,
     NzDropDownModule,
     NzAvatarModule,
+    NzModalModule,
   ],
   template: `
     <nz-header class="navbar">
@@ -92,6 +98,10 @@ import { NzAvatarModule } from 'ng-zorro-antd/avatar';
             <li nz-menu-item (click)="logout()" class="logout-item">
               <span nz-icon nzType="logout"></span>
               Odjavi se
+            </li>
+            <li nz-menu-item (click)="confirmCloseApp()" class="logout-item">
+              <span nz-icon nzType="poweroff"></span>
+              Zatvori aplikaciju
             </li>
           </ul>
         </li>
@@ -173,7 +183,12 @@ export class NavbarComponent implements OnInit {
   isAdmin = false;
   isEmployee = false;
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private http: HttpClient,
+    private modal: NzModalService,
+    private notification: NzNotificationService,
+  ) {}
 
   ngOnInit(): void {
     if (typeof window !== 'undefined') {
@@ -191,5 +206,32 @@ export class NavbarComponent implements OnInit {
       window.localStorage.clear();
     }
     this.router.navigate(['/login']);
+  }
+
+  confirmCloseApp(): void {
+    this.modal.confirm({
+      nzTitle: 'Zatvoriti aplikaciju?',
+      nzContent: 'Ovo će potpuno ugasiti EasyShop aplikaciju na ovom računaru. ' +
+        'Svi koji trenutno rade u aplikaciji na ovom računaru biće odjavljeni.',
+      nzOkText: 'Zatvori aplikaciju',
+      nzOkDanger: true,
+      nzCancelText: 'Odustani',
+      nzOnOk: () => this.closeApp(),
+    });
+  }
+
+  private closeApp(): void {
+    this.http.post(`${environment.apiUrl}/api/system/shutdown`, {}).subscribe({
+      next: () => this.showClosedMessage(),
+      error: () => this.showClosedMessage(), // server se gasi - konekcija moze da "pukne" i pored uspeha
+    });
+  }
+
+  private showClosedMessage(): void {
+    document.body.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100vh;' +
+      'font-family:sans-serif;font-size:20px;color:#333;background:#f5f5f5;">' +
+      'Aplikacija je zatvorena. Ovaj prozor možete zatvoriti (X).</div>';
+    setTimeout(() => window.close(), 800);
   }
 }
