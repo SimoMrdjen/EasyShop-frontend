@@ -15,6 +15,7 @@ import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
 import { NzNotificationService } from 'ng-zorro-antd/notification';
 import { NzDividerModule } from 'ng-zorro-antd/divider';
+import { NzAlertModule } from 'ng-zorro-antd/alert';
 
 import { ContractService } from '../services/contract.service';
 import { ContractResponse, InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LABELS, STATUS_COLORS, STATUS_LABELS } from '../models/contract.model';
@@ -27,7 +28,7 @@ import { ContractResponse, InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LA
     NzTableModule, NzTagModule, NzButtonModule, NzIconModule,
     NzCardModule, NzDescriptionsModule, NzModalModule,
     NzFormModule, NzInputNumberModule, NzSelectModule,
-    NzDatePickerModule, NzDividerModule, CurrencyPipe, DatePipe,
+    NzDatePickerModule, NzDividerModule, NzAlertModule, CurrencyPipe, DatePipe,
   ],
   template: `
     <div style="padding: 24px;">
@@ -105,6 +106,10 @@ import { ContractResponse, InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LA
       nzOkText="Potvrdi uplatu">
       <ng-container *nzModalContent>
         <form nz-form [formGroup]="payForm" nzLayout="vertical">
+          <nz-alert *ngIf="showOverpayWarning()" nzType="warning" nzShowIcon
+            style="margin-bottom:16px;"
+            nzMessage="Ovo je poslednja rata po ugovoru. Iznos preko preostalog duga ({{ remainingForSelected() | currency:'RSD':'symbol':'1.2-2' }}) neće biti nigde evidentiran - proverite iznos pre potvrde.">
+          </nz-alert>
           <nz-form-item>
             <nz-form-label nzRequired>Iznos uplate (RSD)</nz-form-label>
             <nz-form-control nzErrorTip="Unesite iznos">
@@ -172,8 +177,22 @@ export class ContractDetailComponent implements OnInit {
 
   openPayModal(inst: InstallmentResponse): void {
     this.selectedInstallment = inst;
-    this.payForm.reset({ paidAmount: inst.installmentAmount, paymentDate: new Date(), paymentMethod: 'GOTOVINA' });
+    const remaining = inst.installmentAmount - (inst.paidAmount ?? 0);
+    this.payForm.reset({ paidAmount: remaining, paymentDate: new Date(), paymentMethod: 'GOTOVINA' });
     this.payModalVisible = true;
+  }
+
+  remainingForSelected(): number {
+    if (!this.selectedInstallment) return 0;
+    return this.selectedInstallment.installmentAmount - (this.selectedInstallment.paidAmount ?? 0);
+  }
+
+  showOverpayWarning(): boolean {
+    if (!this.selectedInstallment || !this.contract) return false;
+    const isLast = this.selectedInstallment.installmentOrdinal === this.contract.numberOfInstallments;
+    const entered = this.payForm.value.paidAmount;
+    if (entered == null || !isLast) return false;
+    return entered > this.remainingForSelected() + 0.001;
   }
 
   closePayModal(): void {

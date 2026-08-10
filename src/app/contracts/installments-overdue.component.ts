@@ -1,6 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe } from '@angular/common';
-import { Router, RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { NzTableModule } from 'ng-zorro-antd/table';
 import { NzTagModule } from 'ng-zorro-antd/tag';
@@ -11,10 +11,12 @@ import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputNumberModule } from 'ng-zorro-antd/input-number';
 import { NzSelectModule } from 'ng-zorro-antd/select';
 import { NzDatePickerModule } from 'ng-zorro-antd/date-picker';
+import { NzAlertModule } from 'ng-zorro-antd/alert';
 import { NzNotificationService } from 'ng-zorro-antd/notification';
 
 import { CustomerPickerComponent } from './customer-picker.component';
 import { ContractService } from '../services/contract.service';
+import { UserService } from '../services/user.service';
 import { InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LABELS, STATUS_COLORS, STATUS_LABELS } from '../models/contract.model';
 import { UserResponse } from '../models/user.model';
 
@@ -25,7 +27,7 @@ import { UserResponse } from '../models/user.model';
     CommonModule, CurrencyPipe, DatePipe, RouterModule, ReactiveFormsModule,
     NzTableModule, NzTagModule, NzButtonModule, NzIconModule,
     NzModalModule, NzFormModule, NzInputNumberModule, NzSelectModule,
-    NzDatePickerModule,
+    NzDatePickerModule, NzAlertModule,
     CustomerPickerComponent,
   ],
   template: `
@@ -99,6 +101,10 @@ import { UserResponse } from '../models/user.model';
       nzOkText="Potvrdi uplatu">
       <ng-container *nzModalContent>
         <form nz-form [formGroup]="payForm" nzLayout="vertical">
+          <nz-alert *ngIf="showOverpayWarning()" nzType="warning" nzShowIcon
+            style="margin-bottom:16px;"
+            nzMessage="Ovo je poslednja rata po ugovoru. Iznos preko preostalog duga ({{ remainingForSelected() | currency:'RSD':'symbol':'1.2-2' }}) neće biti nigde evidentiran - proverite iznos pre potvrde.">
+          </nz-alert>
           <nz-form-item>
             <nz-form-label nzRequired>Iznos uplate (RSD)</nz-form-label>
             <nz-form-control nzErrorTip="Unesite iznos">
@@ -128,7 +134,7 @@ import { UserResponse } from '../models/user.model';
     </nz-modal>
   `,
 })
-export class InstallmentsOverdueComponent {
+export class InstallmentsOverdueComponent implements OnInit {
   selectedCustomer: UserResponse | null = null;
   installments: InstallmentResponse[] = [];
   loading = false;
@@ -136,6 +142,7 @@ export class InstallmentsOverdueComponent {
   payModalVisible = false;
   paying = false;
   selectedInstallment: InstallmentResponse | null = null;
+  selectedInstallmentIsLast = false;
   payForm: FormGroup;
 
   readonly statusLabel = (s: string) => STATUS_LABELS[s as keyof typeof STATUS_LABELS] ?? s;
@@ -144,15 +151,26 @@ export class InstallmentsOverdueComponent {
 
   constructor(
     private contractService: ContractService,
+    private userService: UserService,
     private fb: FormBuilder,
     private notification: NzNotificationService,
     private router: Router,
+    private route: ActivatedRoute,
   ) {
     this.payForm = this.fb.group({
       paidAmount: [null, [Validators.required, Validators.min(0.01)]],
       paymentDate: [new Date(), Validators.required],
       paymentMethod: ['GOTOVINA', Validators.required],
     });
+  }
+
+  ngOnInit(): void {
+    const customerId = this.route.snapshot.queryParamMap.get('customerId');
+    if (customerId) {
+      this.userService.getCustomerById(Number(customerId)).subscribe({
+        next: customer => this.onCustomerSelected(customer)
+      });
+    }
   }
 
   onCustomerSelected(customer: UserResponse): void {
@@ -166,9 +184,27 @@ export class InstallmentsOverdueComponent {
 
   openPayModal(inst: InstallmentResponse): void {
     this.selectedInstallment = inst;
+    this.selectedInstallmentIsLast = false;
     const remaining = inst.installmentAmount - (inst.paidAmount ?? 0);
     this.payForm.reset({ paidAmount: remaining, paymentDate: new Date(), paymentMethod: 'GOTOVINA' });
     this.payModalVisible = true;
+
+    this.contractService.getContractById(inst.contractId).subscribe({
+      next: contract => {
+        this.selectedInstallmentIsLast = inst.installmentOrdinal === contract.numberOfInstallments;
+      }
+    });
+  }
+
+  remainingForSelected(): number {
+    if (!this.selectedInstallment) return 0;
+    return this.selectedInstallment.installmentAmount - (this.selectedInstallment.paidAmount ?? 0);
+  }
+
+  showOverpayWarning(): boolean {
+    const entered = this.payForm.value.paidAmount;
+    if (entered == null || !this.selectedInstallmentIsLast) return false;
+    return entered > this.remainingForSelected() + 0.001;
   }
 
   closePayModal(): void {

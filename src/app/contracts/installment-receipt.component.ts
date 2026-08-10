@@ -43,8 +43,12 @@ function fmtDateTime(d: Date): string {
           Štampaj
         </button>
         <button (click)="goBack()"
-          style="padding:8px 16px;font-size:14px;cursor:pointer;background:#fff;border:1px solid #d9d9d9;border-radius:4px;">
+          style="padding:8px 16px;font-size:14px;cursor:pointer;background:#fff;border:1px solid #d9d9d9;border-radius:4px;margin-right:8px;">
           <span nz-icon nzType="arrow-left"></span> Nazad na ugovor
+        </button>
+        <button (click)="goToCustomerInstallments()"
+          style="padding:8px 16px;font-size:14px;cursor:pointer;background:#fff;border:1px solid #d9d9d9;border-radius:4px;">
+          <span nz-icon nzType="unordered-list"></span> Nazad na ostale rate kupca
         </button>
       </div>
 
@@ -219,5 +223,11 @@ export class InstallmentReceiptComponent implements OnInit {
 
   goBack(): void {
     this.router.navigate(['/contracts', this.contract!.id]);
+  }
+
+  goToCustomerInstallments(): void {
+    this.router.navigate(['/installments/overdue'], {
+      queryParams: { customerId: this.contract!.customerId }
+    });
   }
 }
