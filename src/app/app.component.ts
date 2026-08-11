@@ -3,6 +3,7 @@ import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { filter } from 'rxjs/operators';
 import { NavbarComponent } from './navbar/navbar.component';
+import { HeartbeatService } from './services/heartbeat.service';
 
 @Component({
   selector: 'app-root',
@@ -20,7 +21,7 @@ export class AppComponent {
   private readonly publicRoutes = ['/login', '/forgot-password', '/reset-password'];
   private readonly printRoutes = ['/print'];
 
-  constructor(private router: Router) {
+  constructor(private router: Router, private heartbeat: HeartbeatService) {
     this.router.events.pipe(
       filter(e => e instanceof NavigationEnd)
     ).subscribe((e: NavigationEnd) => {
