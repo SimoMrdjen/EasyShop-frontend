@@ -11,6 +11,24 @@ export interface InstallmentResponse {
   paidAmount?: number;
   paymentDate?: string;
   paymentMethod?: PaymentMethod;
+  lastPaymentGroupId?: string;
+}
+
+export interface PaymentBreakdownEntry {
+  installmentId: number;
+  installmentOrdinal: number;
+  installmentAmount: number;
+  remainingBefore: number;
+  amountApplied: number;
+  remainingAfter: number;
+}
+
+export interface PaymentBreakdown {
+  contractId: number;
+  paymentDate: string;
+  paymentMethod: PaymentMethod;
+  totalPaid: number;
+  entries: PaymentBreakdownEntry[];
 }
 
 export interface ContractResponse {

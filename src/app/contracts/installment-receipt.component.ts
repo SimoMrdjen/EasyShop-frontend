@@ -5,7 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { NzIconModule } from 'ng-zorro-antd/icon';
 
 import { ContractService } from '../services/contract.service';
-import { ContractResponse, InstallmentResponse, PAYMENT_METHOD_LABELS, PaymentMethod } from '../models/contract.model';
+import { ContractResponse, InstallmentResponse, PAYMENT_METHOD_LABELS, PaymentBreakdown, PaymentMethod } from '../models/contract.model';
 
 const PRODAVAC = {
   naziv: 'STR DUO ZRENJANIN',
@@ -64,23 +64,33 @@ function fmtDateTime(d: Date): string {
 
         <div class="row"><span>Ugovor br:</span><span class="bold">{{ contract.id }}</span></div>
         <div class="row"><span>Kupac:</span><span class="bold">{{ contract.customerFullName }}</span></div>
-        <div class="row"><span>Rata:</span><span class="bold">{{ installment.installmentOrdinal }}/{{ contract.numberOfInstallments }}</span></div>
 
-        <div class="sep"></div>
-
-        <div class="row"><span>Iznos rate:</span><span>{{ fmt(installment.installmentAmount) }}</span></div>
-        <div class="row"><span>Uplaćeno na ovu ratu:</span><span class="bold">{{ fmt(installment.paidAmount) }} din.</span></div>
-        <div class="row"><span>Način plaćanja:</span><span>{{ methodLabel(installment.paymentMethod) }}</span></div>
-        <div class="row"><span>Datum uplate:</span><span>{{ fmtDate(installment.paymentDate) }}</span></div>
-
-        <ng-container *ngIf="affectedInstallments.length > 1">
+        <!-- Detaljna raspodela uplate (kad imamo tacne podatke o transakciji) -->
+        <ng-container *ngIf="breakdown as bd">
           <div class="sep"></div>
-          <div class="row"><span>Ukupno uplaćeno:</span><span class="bold">{{ fmt(totalPaidThisTransaction) }} din.</span></div>
-          <div class="center small" style="margin-top:4px;">Uplata pokriva više rata:</div>
-          <div class="row" *ngFor="let ai of affectedInstallments">
-            <span>Rata {{ ai.installmentOrdinal }} {{ ai.status === 'PARTIAL' ? '(delimično)' : '' }}:</span>
-            <span>{{ fmt(ai.paidAmount) }} din.</span>
-          </div>
+          <div class="center small">Raspodela uplate po ratama:</div>
+          <ng-container *ngFor="let e of bd.entries; let last = last">
+            <div class="row" style="margin-top:4px;"><span class="bold">Rata {{ e.installmentOrdinal }} (iznos {{ fmt(e.installmentAmount) }}):</span></div>
+            <div class="row"><span>Dug pre uplate:</span><span>{{ fmt(e.remainingBefore) }}</span></div>
+            <div class="row"><span>Uplaćeno sada:</span><span class="bold">{{ fmt(e.amountApplied) }}</span></div>
+            <div class="row"><span>Preostalo na rati:</span><span>{{ fmt(e.remainingAfter) }}</span></div>
+            <div class="sep" *ngIf="!last"></div>
+          </ng-container>
+
+          <div class="sep"></div>
+          <div class="row"><span>Ukupno uplaćeno:</span><span class="bold">{{ fmt(bd.totalPaid) }} din.</span></div>
+          <div class="row"><span>Način plaćanja:</span><span>{{ methodLabel(bd.paymentMethod) }}</span></div>
+          <div class="row"><span>Datum uplate:</span><span>{{ fmtDate(bd.paymentDate) }}</span></div>
+        </ng-container>
+
+        <!-- Jednostavan prikaz - koristi se samo ako tacna raspodela nije dostupna (starije uplate) -->
+        <ng-container *ngIf="!breakdown">
+          <div class="row"><span>Rata:</span><span class="bold">{{ installment.installmentOrdinal }}/{{ contract.numberOfInstallments }}</span></div>
+          <div class="sep"></div>
+          <div class="row"><span>Iznos rate:</span><span>{{ fmt(installment.installmentAmount) }}</span></div>
+          <div class="row"><span>Uplaćeno na ovu ratu:</span><span class="bold">{{ fmt(installment.paidAmount) }} din.</span></div>
+          <div class="row"><span>Način plaćanja:</span><span>{{ methodLabel(installment.paymentMethod) }}</span></div>
+          <div class="row"><span>Datum uplate:</span><span>{{ fmtDate(installment.paymentDate) }}</span></div>
         </ng-container>
 
         <div class="sep"></div>
@@ -153,8 +163,7 @@ function fmtDateTime(d: Date): string {
 export class InstallmentReceiptComponent implements OnInit {
   contract: ContractResponse | null = null;
   installment: InstallmentResponse | null = null;
-  affectedInstallments: InstallmentResponse[] = [];
-  totalPaidThisTransaction = 0;
+  breakdown: PaymentBreakdown | null = null;
   printedAt = fmtDateTime(new Date());
 
   readonly PRODAVAC = PRODAVAC;
@@ -175,40 +184,16 @@ export class InstallmentReceiptComponent implements OnInit {
       next: contract => {
         this.contract = contract;
         this.installment = contract.installments.find(i => i.id === installmentId) ?? null;
-        this.affectedInstallments = this.computeAffectedInstallments();
-        this.totalPaidThisTransaction = this.affectedInstallments
-          .reduce((sum, i) => sum + (i.paidAmount ?? 0), 0);
+
+        const groupId = this.installment?.lastPaymentGroupId;
+        if (groupId) {
+          this.contractService.getPaymentBreakdown(groupId).subscribe({
+            next: bd => { this.breakdown = bd; },
+            error: () => { this.breakdown = null; } // fallback na jednostavan prikaz
+          });
+        }
       }
     });
-  }
-
-  /**
-   * Kad uplata predje iznos rate, visak se automatski prenosi na narednu ratu
-   * (ili vise njih). Ova funkcija prepoznaje koje su rate obuhvacene ISTOM
-   * uplatom kao kliknuta rata - krecuci od nje unapred, dokle god naredna rata
-   * ima isti datum i nacin placanja i stvarno je dotaknuta tom uplatom.
-   */
-  private computeAffectedInstallments(): InstallmentResponse[] {
-    if (!this.contract || !this.installment) return [];
-
-    const sorted = [...this.contract.installments].sort((a, b) => a.installmentOrdinal - b.installmentOrdinal);
-    const startIdx = sorted.findIndex(i => i.id === this.installment!.id);
-    if (startIdx === -1) return [this.installment];
-
-    const start = sorted[startIdx];
-    const group = [start];
-
-    for (let idx = startIdx + 1; idx < sorted.length; idx++) {
-      const next = sorted[idx];
-      const touchedBySamePayment =
-        next.paymentDate === start.paymentDate &&
-        next.paymentMethod === start.paymentMethod &&
-        next.paidAmount != null && next.paidAmount > 0;
-      if (!touchedBySamePayment) break;
-      group.push(next);
-    }
-
-    return group;
   }
 
   methodLabel(m: PaymentMethod | undefined): string {
