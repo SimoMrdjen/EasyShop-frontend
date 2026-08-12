@@ -13,10 +13,13 @@ import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzTagModule } from 'ng-zorro-antd/tag';
 import { NzEmptyModule } from 'ng-zorro-antd/empty';
 import { NzAlertModule } from 'ng-zorro-antd/alert';
+import { NzListModule } from 'ng-zorro-antd/list';
 import { NzNotificationService } from 'ng-zorro-antd/notification';
 
 import { SmsReminderService } from '../services/sms-reminder.service';
-import { SmsReminderLogEntry, SmsReminderRule, SmsReminderRuleRequest } from '../models/sms-reminder.model';
+import { UserService } from '../services/user.service';
+import { ExcludedCustomer, SmsReminderLogEntry, SmsReminderRule, SmsReminderRuleRequest } from '../models/sms-reminder.model';
+import { UserResponse } from '../models/user.model';
 
 @Component({
   selector: 'app-sms-reminder-rules',
@@ -24,17 +27,40 @@ import { SmsReminderLogEntry, SmsReminderRule, SmsReminderRuleRequest } from '..
   imports: [
     CommonModule, FormsModule,
     NzTableModule, NzButtonModule, NzFormModule, NzInputModule, NzInputNumberModule,
-    NzSwitchModule, NzModalModule, NzIconModule, NzCardModule, NzTagModule, NzEmptyModule, NzAlertModule,
+    NzSwitchModule, NzModalModule, NzIconModule, NzCardModule, NzTagModule, NzEmptyModule,
+    NzAlertModule, NzListModule,
   ],
   template: `
   <div style="padding: 24px; max-width: 1000px;">
     <h2>SMS podsetnici</h2>
 
+    <nz-card style="margin-bottom: 24px; border-color: #1890ff;">
+      <div style="display:flex; align-items:center; justify-content: space-between;">
+        <div>
+          <div style="font-weight: 600; font-size: 16px;">Globalno slanje SMS podsetnika</div>
+          <div style="color:#888; font-size: 13px;">
+            Glavni prekidač - kad je isključeno, ništa se ne šalje ni po jednom pravilu
+            (korisno npr. dok traje prelazak na novu aplikaciju).
+          </div>
+        </div>
+        <nz-switch [ngModel]="settingsSendingEnabled" (ngModelChange)="toggleGlobalSending($event)" [nzLoading]="savingSettings"></nz-switch>
+      </div>
+    </nz-card>
+
     <nz-alert
+      *ngIf="providerConnected === false"
       nzType="info"
       nzShowIcon
       nzMessage="SMS provajder još nije podešen"
       nzDescription="Poruke se trenutno samo simuliraju (upisuju u istoriju ispod), ništa se stvarno ne šalje dok se ne poveže SMS nalog."
+      style="margin-bottom: 16px;">
+    </nz-alert>
+    <nz-alert
+      *ngIf="providerConnected === true"
+      nzType="success"
+      nzShowIcon
+      nzMessage="SMS provajder je povezan"
+      nzDescription="Poruke se stvarno šalju na brojeve telefona kupaca."
       style="margin-bottom: 16px;">
     </nz-alert>
 
@@ -72,6 +98,39 @@ import { SmsReminderLogEntry, SmsReminderRule, SmsReminderRuleRequest } from '..
       <nz-empty *ngIf="!loadingRules && rules.length === 0" nzNotFoundContent="Nema definisanih pravila"></nz-empty>
     </nz-card>
 
+    <nz-card nzTitle="Kupci isključeni iz SMS podsetnika" style="margin-bottom: 24px;">
+      <div style="display:flex; gap:8px; margin-bottom: 12px;">
+        <input nz-input placeholder="Pretraži kupca po prezimenu..." [(ngModel)]="excludeSearchTerm" (keyup.enter)="searchCustomersToExclude()" />
+        <button nz-button (click)="searchCustomersToExclude()" [nzLoading]="searchingCustomers">Pretraži</button>
+      </div>
+
+      <div *ngIf="excludeSearchResults.length > 0" style="margin-bottom: 16px; border: 1px solid #f0f0f0; border-radius: 4px;">
+        <div *ngFor="let c of excludeSearchResults" style="display:flex; justify-content: space-between; align-items:center; padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
+          <span>{{ c.firstName }} {{ c.lastName }} <span style="color:#888;">({{ c.phoneNumber }})</span></span>
+          <button nz-button nzSize="small" (click)="excludeCustomer(c)">Isključi</button>
+        </div>
+      </div>
+
+      <div style="font-weight: 600; margin-bottom: 8px;">Trenutno isključeni:</div>
+      <nz-table [nzData]="excludedCustomers" [nzShowPagination]="false" [nzLoading]="loadingExcluded">
+        <thead>
+          <tr>
+            <th>Kupac</th>
+            <th>Telefon</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let c of excludedCustomers">
+            <td>{{ c.fullName }}</td>
+            <td>{{ c.phoneNumber }}</td>
+            <td><button nz-button nzType="link" (click)="includeCustomer(c)">Uključi nazad</button></td>
+          </tr>
+        </tbody>
+      </nz-table>
+      <nz-empty *ngIf="!loadingExcluded && excludedCustomers.length === 0" nzNotFoundContent="Nema isključenih kupaca"></nz-empty>
+    </nz-card>
+
     <nz-card nzTitle="Istorija poslatih podsetnika">
       <button nz-button (click)="runNow()" [nzLoading]="running" style="margin-bottom: 12px;">
         <span nz-icon nzType="thunderbolt"></span> Pošalji odmah (test)
@@ -95,10 +154,8 @@ import { SmsReminderLogEntry, SmsReminderRule, SmsReminderRuleRequest } from '..
             <td>{{ entry.phoneNumber }}</td>
             <td>{{ entry.contractId ? ('#' + entry.contractId + ' / rata ' + entry.installmentOrdinal) : '-' }}</td>
             <td>
-              <nz-tag [nzColor]="entry.status === 'SENT' ? 'green' : 'red'">
-                {{ entry.status === 'SENT' ? 'Poslato' : 'Neuspešno' }}
-              </nz-tag>
-              <div *ngIf="entry.errorMessage" style="color:#f5222d; font-size:12px;">{{ entry.errorMessage }}</div>
+              <nz-tag [nzColor]="statusColor(entry.status)">{{ statusLabel(entry.status) }}</nz-tag>
+              <div *ngIf="entry.errorMessage" style="color:#888; font-size:12px;">{{ entry.errorMessage }}</div>
             </td>
             <td style="max-width: 300px; white-space: pre-wrap;">{{ entry.message }}</td>
           </tr>
@@ -145,8 +202,16 @@ import { SmsReminderLogEntry, SmsReminderRule, SmsReminderRuleRequest } from '..
 export class SmsReminderRulesComponent implements OnInit {
   rules: SmsReminderRule[] = [];
   log: SmsReminderLogEntry[] = [];
+  excludedCustomers: ExcludedCustomer[] = [];
+  excludeSearchTerm = '';
+  excludeSearchResults: UserResponse[] = [];
+  providerConnected: boolean | null = null;
+  settingsSendingEnabled = true;
   loadingRules = false;
   loadingLog = false;
+  loadingExcluded = false;
+  searchingCustomers = false;
+  savingSettings = false;
   running = false;
   saving = false;
 
@@ -158,12 +223,37 @@ export class SmsReminderRulesComponent implements OnInit {
 
   constructor(
     private smsReminderService: SmsReminderService,
+    private userService: UserService,
     private notification: NzNotificationService,
   ) {}
 
   ngOnInit(): void {
     this.loadRules();
     this.loadLog();
+    this.loadExcludedCustomers();
+    this.smsReminderService.getStatus().subscribe({
+      next: (status) => { this.providerConnected = status.providerConnected; },
+      error: () => { this.providerConnected = false; },
+    });
+    this.smsReminderService.getSettings().subscribe({
+      next: (settings) => { this.settingsSendingEnabled = settings.sendingEnabled; },
+      error: () => {},
+    });
+  }
+
+  toggleGlobalSending(value: boolean): void {
+    this.savingSettings = true;
+    this.smsReminderService.updateSettings({ sendingEnabled: value }).subscribe({
+      next: (settings) => {
+        this.settingsSendingEnabled = settings.sendingEnabled;
+        this.savingSettings = false;
+        this.notification.success('Sačuvano', settings.sendingEnabled ? 'Slanje SMS podsetnika je uključeno' : 'Slanje SMS podsetnika je isključeno');
+      },
+      error: () => {
+        this.savingSettings = false;
+        this.notification.error('Greška', 'Izmena podešavanja nije uspela');
+      },
+    });
   }
 
   loadRules(): void {
@@ -179,6 +269,46 @@ export class SmsReminderRulesComponent implements OnInit {
     this.smsReminderService.getLog().subscribe({
       next: (log) => { this.log = log; this.loadingLog = false; },
       error: () => { this.loadingLog = false; this.notification.error('Greška', 'Nije moguće učitati istoriju'); },
+    });
+  }
+
+  loadExcludedCustomers(): void {
+    this.loadingExcluded = true;
+    this.smsReminderService.getExcludedCustomers().subscribe({
+      next: (list) => { this.excludedCustomers = list; this.loadingExcluded = false; },
+      error: () => { this.loadingExcluded = false; },
+    });
+  }
+
+  searchCustomersToExclude(): void {
+    if (!this.excludeSearchTerm.trim()) {
+      return;
+    }
+    this.searchingCustomers = true;
+    this.userService.searchCustomers(this.excludeSearchTerm.trim()).subscribe({
+      next: (results) => { this.excludeSearchResults = results; this.searchingCustomers = false; },
+      error: () => { this.searchingCustomers = false; this.notification.error('Greška', 'Pretraga nije uspela'); },
+    });
+  }
+
+  excludeCustomer(customer: UserResponse): void {
+    this.smsReminderService.excludeCustomer(customer.profileId).subscribe({
+      next: () => {
+        this.notification.success('Isključeno', 'Kupac neće više dobijati SMS podsetnike');
+        this.excludeSearchResults = this.excludeSearchResults.filter(c => c.profileId !== customer.profileId);
+        this.loadExcludedCustomers();
+      },
+      error: () => this.notification.error('Greška', 'Isključivanje nije uspelo'),
+    });
+  }
+
+  includeCustomer(customer: ExcludedCustomer): void {
+    this.smsReminderService.includeCustomer(customer.customerId).subscribe({
+      next: () => {
+        this.notification.success('Uključeno', 'Kupac će opet dobijati SMS podsetnike');
+        this.loadExcludedCustomers();
+      },
+      error: () => this.notification.error('Greška', 'Uključivanje nije uspelo'),
     });
   }
 
@@ -246,5 +376,17 @@ export class SmsReminderRulesComponent implements OnInit {
         this.notification.error('Greška', 'Pokretanje nije uspelo');
       },
     });
+  }
+
+  statusColor(status: string): string {
+    if (status === 'SENT') return 'green';
+    if (status === 'SKIPPED') return 'orange';
+    return 'red';
+  }
+
+  statusLabel(status: string): string {
+    if (status === 'SENT') return 'Poslato';
+    if (status === 'SKIPPED') return 'Preskočeno';
+    return 'Neuspešno';
   }
 }

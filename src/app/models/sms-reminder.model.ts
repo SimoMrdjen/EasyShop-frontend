@@ -18,7 +18,17 @@ export interface SmsReminderLogEntry {
   contractId: number | null;
   installmentOrdinal: number | null;
   message: string;
-  status: 'SENT' | 'FAILED';
+  status: 'SENT' | 'FAILED' | 'SKIPPED';
   errorMessage: string | null;
   sentAt: string;
+}
+
+export interface SmsReminderSettings {
+  sendingEnabled: boolean;
+}
+
+export interface ExcludedCustomer {
+  customerId: number;
+  fullName: string;
+  phoneNumber: string | null;
 }
