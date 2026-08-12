@@ -57,4 +57,8 @@ export class SmsReminderService {
   includeCustomer(customerId: number): Observable<void> {
     return this.http.delete<void>(`${this.base}/excluded-customers/${customerId}`);
   }
+
+  markOldAsNotified(ruleId: number, olderThanDays: number): Observable<{ markedCount: number }> {
+    return this.http.post<{ markedCount: number }>(`${this.base}/${ruleId}/mark-old-as-notified?olderThanDays=${olderThanDays}`, {});
+  }
 }

@@ -91,6 +91,9 @@ import { UserResponse } from '../models/user.model';
             <td>
               <button nz-button nzType="link" (click)="openEditRuleModal(rule)">Izmeni</button>
               <button nz-button nzType="link" nzDanger (click)="deleteRule(rule)">Obriši</button>
+              <button *ngIf="rule.daysOffset > 0" nz-button nzType="link" (click)="openMarkOldModal(rule)">
+                Označi staro kao obavešteno
+              </button>
             </td>
           </tr>
         </tbody>
@@ -197,6 +200,28 @@ import { UserResponse } from '../models/user.model';
       </form>
     </ng-container>
   </nz-modal>
+
+  <nz-modal
+    [(nzVisible)]="markOldModalVisible"
+    nzTitle="Označi staro kao obavešteno"
+    (nzOnCancel)="markOldModalVisible = false"
+    (nzOnOk)="confirmMarkOldAsNotified()"
+    [nzOkLoading]="markingOld"
+    nzOkText="Označi">
+    <ng-container *nzModalContent>
+      <p>
+        Ovo NEĆE poslati nijednu SMS poruku - samo će rate starije od zadatog broja dana
+        biti označene kao da su već obaveštene (npr. jer je ranije ručno poslata poruka iz stare
+        aplikacije), tako da ih automatsko slanje ubuduće preskoči za ovo pravilo.
+      </p>
+      <nz-form-item>
+        <nz-form-label nzRequired>Stariji od (dana)</nz-form-label>
+        <nz-form-control>
+          <nz-input-number [(ngModel)]="markOldThresholdDays" name="markOldThresholdDays" [nzMin]="1" style="width: 100%;"></nz-input-number>
+        </nz-form-control>
+      </nz-form-item>
+    </ng-container>
+  </nz-modal>
   `,
 })
 export class SmsReminderRulesComponent implements OnInit {
@@ -220,6 +245,11 @@ export class SmsReminderRulesComponent implements OnInit {
   formDaysOffset = 0;
   formMessageTemplate = '';
   formActive = true;
+
+  markOldModalVisible = false;
+  markingOld = false;
+  markOldRuleId: number | null = null;
+  markOldThresholdDays = 45;
 
   constructor(
     private smsReminderService: SmsReminderService,
@@ -352,6 +382,31 @@ export class SmsReminderRulesComponent implements OnInit {
       error: () => {
         this.saving = false;
         this.notification.error('Greška', 'Čuvanje pravila nije uspelo');
+      },
+    });
+  }
+
+  openMarkOldModal(rule: SmsReminderRule): void {
+    this.markOldRuleId = rule.id;
+    this.markOldThresholdDays = 45;
+    this.markOldModalVisible = true;
+  }
+
+  confirmMarkOldAsNotified(): void {
+    if (!this.markOldRuleId || !this.markOldThresholdDays || this.markOldThresholdDays < 1) {
+      return;
+    }
+    this.markingOld = true;
+    this.smsReminderService.markOldAsNotified(this.markOldRuleId, this.markOldThresholdDays).subscribe({
+      next: (result) => {
+        this.markingOld = false;
+        this.markOldModalVisible = false;
+        this.notification.success('Označeno', `Označeno kao već obavešteno: ${result.markedCount} rata`);
+        this.loadLog();
+      },
+      error: () => {
+        this.markingOld = false;
+        this.notification.error('Greška', 'Označavanje nije uspelo');
       },
     });
   }
