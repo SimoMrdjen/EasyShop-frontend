@@ -55,6 +55,10 @@ import { environment } from '../../environments/environment';
             <span nz-icon nzType="idcard"></span>
             Zaposleni
           </li>
+          <li nz-menu-item routerLink="/admin/sms-rules">
+            <span nz-icon nzType="message"></span>
+            SMS podsetnici
+          </li>
         </ng-container>
 
         <!-- Ugovori i rate (admin i zaposleni) -->

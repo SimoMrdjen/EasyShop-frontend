@@ -75,5 +75,10 @@ export const routes: Routes = [
     loadComponent: () => import('./contracts/bank-statement-import.component').then(m => m.BankStatementImportComponent),
     canActivate: [employeeOrAdminGuard]
   },
+  {
+    path: 'admin/sms-rules',
+    loadComponent: () => import('./admin/sms-reminder-rules.component').then(m => m.SmsReminderRulesComponent),
+    canActivate: [adminGuard]
+  },
   { path: '**', redirectTo: 'login' },
 ];
