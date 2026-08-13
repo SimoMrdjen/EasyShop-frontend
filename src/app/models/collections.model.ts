@@ -1,12 +1,17 @@
-export interface DebtorCallListEntry {
-  customerId: number;
-  customerFullName: string;
-  phoneNumber: string | null;
+export interface DebtorCallInstallment {
   contractId: number;
   installmentOrdinal: number;
   maturityDate: string;
   daysOverdue: number;
   remainingAmount: number;
+}
+
+export interface DebtorCallGroup {
+  customerId: number;
+  customerFullName: string;
+  phoneNumber: string | null;
+  totalRemainingAmount: number;
+  installments: DebtorCallInstallment[];
 }
 
 export interface BucketStat {
