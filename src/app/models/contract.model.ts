@@ -41,7 +41,15 @@ export interface ContractResponse {
   contractDate: string;
   numberOfInstallments: number;
   installmentAmount: number;
+  sentToLitigation: boolean;
+  litigationDate?: string;
+  litigationNote?: string;
   installments: InstallmentResponse[];
+}
+
+export interface LitigationRequest {
+  date: string;
+  note?: string;
 }
 
 export interface ContractRequest {

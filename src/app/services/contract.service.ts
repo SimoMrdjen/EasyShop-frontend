@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { ContractRequest, ContractResponse, DailyPaymentReport, InstallmentResponse, PaymentBreakdown, PayInstallmentRequest } from '../models/contract.model';
+import { ContractRequest, ContractResponse, DailyPaymentReport, InstallmentResponse, LitigationRequest, PaymentBreakdown, PayInstallmentRequest } from '../models/contract.model';
 
 @Injectable({ providedIn: 'root' })
 export class ContractService {
@@ -44,5 +44,17 @@ export class ContractService {
 
   getPaymentBreakdown(groupId: string): Observable<PaymentBreakdown> {
     return this.http.get<PaymentBreakdown>(`${this.base}/installments/payment-groups/${groupId}`);
+  }
+
+  markSentToLitigation(contractId: number, req: LitigationRequest): Observable<ContractResponse> {
+    return this.http.post<ContractResponse>(`${this.base}/admin/contracts/${contractId}/litigation`, req);
+  }
+
+  unmarkLitigation(contractId: number): Observable<ContractResponse> {
+    return this.http.delete<ContractResponse>(`${this.base}/admin/contracts/${contractId}/litigation`);
+  }
+
+  getLitigationContracts(): Observable<ContractResponse[]> {
+    return this.http.get<ContractResponse[]>(`${this.base}/admin/contracts/litigation`);
   }
 }

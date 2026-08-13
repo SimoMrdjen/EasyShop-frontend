@@ -80,5 +80,20 @@ export const routes: Routes = [
     loadComponent: () => import('./admin/sms-reminder-rules.component').then(m => m.SmsReminderRulesComponent),
     canActivate: [adminGuard]
   },
+  {
+    path: 'admin/debtor-calls',
+    loadComponent: () => import('./admin/debtor-call-list.component').then(m => m.DebtorCallListComponent),
+    canActivate: [adminGuard]
+  },
+  {
+    path: 'admin/litigation',
+    loadComponent: () => import('./admin/litigation-list.component').then(m => m.LitigationListComponent),
+    canActivate: [adminGuard]
+  },
+  {
+    path: 'admin/statistics',
+    loadComponent: () => import('./admin/statistics.component').then(m => m.StatisticsComponent),
+    canActivate: [adminGuard]
+  },
   { path: '**', redirectTo: 'login' },
 ];

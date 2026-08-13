@@ -9,6 +9,7 @@ import { NzIconModule } from 'ng-zorro-antd/icon';
 import { NzCardModule } from 'ng-zorro-antd/card';
 import { NzDescriptionsModule } from 'ng-zorro-antd/descriptions';
 import { NzModalModule, NzModalService } from 'ng-zorro-antd/modal';
+
 import { NzFormModule } from 'ng-zorro-antd/form';
 import { NzInputNumberModule } from 'ng-zorro-antd/input-number';
 import { NzSelectModule } from 'ng-zorro-antd/select';
@@ -19,6 +20,7 @@ import { NzAlertModule } from 'ng-zorro-antd/alert';
 
 import { ContractService } from '../services/contract.service';
 import { ContractResponse, InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LABELS, STATUS_COLORS, STATUS_LABELS } from '../models/contract.model';
+import { NzInputModule } from 'ng-zorro-antd/input';
 
 @Component({
   selector: 'app-contract-detail',
@@ -28,7 +30,7 @@ import { ContractResponse, InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LA
     NzTableModule, NzTagModule, NzButtonModule, NzIconModule,
     NzCardModule, NzDescriptionsModule, NzModalModule,
     NzFormModule, NzInputNumberModule, NzSelectModule,
-    NzDatePickerModule, NzDividerModule, NzAlertModule, CurrencyPipe, DatePipe,
+    NzDatePickerModule, NzDividerModule, NzAlertModule, NzInputModule, CurrencyPipe, DatePipe,
   ],
   template: `
     <div style="padding: 24px;">
@@ -39,7 +41,19 @@ import { ContractResponse, InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LA
         <button nz-button nzType="default" [routerLink]="['/contracts', contract?.id, 'print']" *ngIf="contract">
           <span nz-icon nzType="printer"></span> Štampaj ugovor
         </button>
+        <button *ngIf="isAdmin && contract && !contract.sentToLitigation" nz-button nzDanger
+          (click)="openLitigationModal()">
+          <span nz-icon nzType="bank"></span> Pošalji na utuženje
+        </button>
+        <button *ngIf="isAdmin && contract?.sentToLitigation" nz-button (click)="confirmUnmarkLitigation()">
+          Poništi utuženje
+        </button>
       </div>
+
+      <nz-alert *ngIf="contract?.sentToLitigation" nzType="warning" nzShowIcon style="margin-bottom:16px;"
+        nzMessage="Ugovor je poslat na utuženje"
+        [nzDescription]="'Datum: ' + (contract!.litigationDate | date:'dd.MM.yyyy') + (contract!.litigationNote ? (' — ' + contract!.litigationNote) : '')">
+      </nz-alert>
 
       <ng-container *ngIf="contract">
         <!-- Podaci o ugovoru -->
@@ -137,16 +151,43 @@ import { ContractResponse, InstallmentResponse, PaymentMethod, PAYMENT_METHOD_LA
         </form>
       </ng-container>
     </nz-modal>
+
+    <!-- Modal za utuženje -->
+    <nz-modal [(nzVisible)]="litigationModalVisible" nzTitle="Pošalji ugovor na utuženje"
+      (nzOnCancel)="litigationModalVisible = false" (nzOnOk)="confirmMarkLitigation()"
+      [nzOkLoading]="markingLitigation" nzOkText="Pošalji" nzOkDanger>
+      <ng-container *nzModalContent>
+        <form nz-form [formGroup]="litigationForm" nzLayout="vertical">
+          <nz-form-item>
+            <nz-form-label nzRequired>Datum</nz-form-label>
+            <nz-form-control nzErrorTip="Unesite datum">
+              <nz-date-picker formControlName="date" nzFormat="dd.MM.yyyy" style="width:100%;"></nz-date-picker>
+            </nz-form-control>
+          </nz-form-item>
+          <nz-form-item>
+            <nz-form-label>Beleška (broj predmeta, advokat, i sl.)</nz-form-label>
+            <nz-form-control>
+              <textarea nz-input formControlName="note" rows="3"></textarea>
+            </nz-form-control>
+          </nz-form-item>
+        </form>
+      </ng-container>
+    </nz-modal>
   `,
 })
 export class ContractDetailComponent implements OnInit {
   contract: ContractResponse | null = null;
   loading = false;
+  isAdmin = false;
 
   payModalVisible = false;
   paying = false;
   selectedInstallment: InstallmentResponse | null = null;
   payForm: FormGroup;
+
+  litigationModalVisible = false;
+  markingLitigation = false;
+  litigationForm: FormGroup;
 
   readonly statusLabel = (s: string) => STATUS_LABELS[s as keyof typeof STATUS_LABELS] ?? s;
   readonly statusColor = (s: string) => STATUS_COLORS[s as keyof typeof STATUS_COLORS] ?? 'default';
@@ -157,6 +198,7 @@ export class ContractDetailComponent implements OnInit {
     private router: Router,
     private contractService: ContractService,
     private notification: NzNotificationService,
+    private modal: NzModalService,
     private fb: FormBuilder,
   ) {
     this.payForm = this.fb.group({
@@ -164,14 +206,65 @@ export class ContractDetailComponent implements OnInit {
       paymentDate: [new Date(), Validators.required],
       paymentMethod: ['GOTOVINA', Validators.required],
     });
+    this.litigationForm = this.fb.group({
+      date: [new Date(), Validators.required],
+      note: [''],
+    });
   }
 
   ngOnInit(): void {
+    if (typeof window !== 'undefined') {
+      this.isAdmin = window.localStorage.getItem('role') === 'ADMIN';
+    }
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.loading = true;
     this.contractService.getContractById(id).subscribe({
       next: res => { this.contract = res; this.loading = false; },
       error: () => { this.loading = false; }
+    });
+  }
+
+  openLitigationModal(): void {
+    this.litigationForm.reset({ date: new Date(), note: '' });
+    this.litigationModalVisible = true;
+  }
+
+  confirmMarkLitigation(): void {
+    if (this.litigationForm.invalid || !this.contract) return;
+    this.markingLitigation = true;
+    const date: Date = this.litigationForm.value.date;
+    this.contractService.markSentToLitigation(this.contract.id, {
+      date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+      note: this.litigationForm.value.note || undefined,
+    }).subscribe({
+      next: (updated) => {
+        this.contract = updated;
+        this.markingLitigation = false;
+        this.litigationModalVisible = false;
+        this.notification.success('Sačuvano', 'Ugovor je označen kao poslat na utuženje');
+      },
+      error: () => {
+        this.markingLitigation = false;
+        this.notification.error('Greška', 'Označavanje nije uspelo');
+      },
+    });
+  }
+
+  confirmUnmarkLitigation(): void {
+    if (!this.contract) return;
+    this.modal.confirm({
+      nzTitle: 'Poništiti utuženje?',
+      nzContent: 'Ugovor će se ponovo pojaviti u dospelim ratama, pregledu za pozivanje i SMS podsetnicima.',
+      nzOkText: 'Poništi',
+      nzOnOk: () => {
+        this.contractService.unmarkLitigation(this.contract!.id).subscribe({
+          next: (updated) => {
+            this.contract = updated;
+            this.notification.success('Sačuvano', 'Utuženje je poništeno');
+          },
+          error: () => this.notification.error('Greška', 'Poništavanje nije uspelo'),
+        });
+      },
     });
   }
 

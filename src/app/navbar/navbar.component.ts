@@ -59,6 +59,13 @@ import { environment } from '../../environments/environment';
             <span nz-icon nzType="message"></span>
             SMS podsetnici
           </li>
+          <li nz-submenu nzTitle="Naplata" nzIcon="dollar">
+            <ul>
+              <li nz-menu-item routerLink="/admin/debtor-calls">Pregled za pozivanje dužnika</li>
+              <li nz-menu-item routerLink="/admin/litigation">Ugovori u utuženju</li>
+              <li nz-menu-item routerLink="/admin/statistics">Statistika</li>
+            </ul>
+          </li>
         </ng-container>
 
         <!-- Ugovori i rate (admin i zaposleni) -->
