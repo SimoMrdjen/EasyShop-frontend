@@ -35,7 +35,7 @@ import { UserResponse } from '../models/user.model';
 
       <!-- Korak 1: odabir kupca -->
       <ng-container *ngIf="!selectedCustomer">
-        <h2>Dospele rate — odaberite kupca</h2>
+        <h2>Plaćanje rate — odaberite kupca</h2>
         <app-customer-picker (customerSelected)="onCustomerSelected($event)"></app-customer-picker>
       </ng-container>
 
@@ -46,7 +46,7 @@ import { UserResponse } from '../models/user.model';
             <span nz-icon nzType="arrow-left"></span> Promeni kupca
           </button>
           <h2 style="margin:0;">
-            Dospele rate — <strong>{{ selectedCustomer.firstName }} {{ selectedCustomer.lastName }}</strong>
+            Plaćanje rate — <strong>{{ selectedCustomer.firstName }} {{ selectedCustomer.lastName }}</strong>
           </h2>
         </div>
 

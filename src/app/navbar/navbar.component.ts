@@ -33,6 +33,22 @@ import { environment } from '../../environments/environment';
 
       <ul nz-menu nzTheme="dark" nzMode="horizontal" class="navbar-menu">
 
+        <!-- Redosled po zahtevu: nadji kupca, placanje rate, dnevni izvestaj -->
+        <ng-container *ngIf="isAdmin || isEmployee">
+          <li nz-menu-item routerLink="/customers/find">
+            <span nz-icon nzType="idcard"></span>
+            Nađi kupca
+          </li>
+          <li nz-menu-item routerLink="/installments/overdue">
+            <span nz-icon nzType="warning"></span>
+            Plaćanje rate
+          </li>
+          <li nz-menu-item routerLink="/reports/daily">
+            <span nz-icon nzType="bar-chart"></span>
+            Dnevni izveštaj
+          </li>
+        </ng-container>
+
         <!-- Admin i zaposleni vide unos i kupce -->
         <ng-container *ngIf="isAdmin || isEmployee">
           <li nz-menu-item routerLink="/admin/users" [queryParams]="{tab: 0}">
@@ -42,10 +58,6 @@ import { environment } from '../../environments/environment';
           <li nz-menu-item routerLink="/admin/users" [queryParams]="{tab: 1}">
             <span nz-icon nzType="team"></span>
             Kupci
-          </li>
-          <li nz-menu-item routerLink="/customers/find">
-            <span nz-icon nzType="idcard"></span>
-            Nađi kupca
           </li>
         </ng-container>
 
@@ -77,14 +89,6 @@ import { environment } from '../../environments/environment';
           <li nz-menu-item routerLink="/contracts/new">
             <span nz-icon nzType="file-add"></span>
             Novi ugovor
-          </li>
-          <li nz-menu-item routerLink="/installments/overdue">
-            <span nz-icon nzType="warning"></span>
-            Dospele rate
-          </li>
-          <li nz-menu-item routerLink="/reports/daily">
-            <span nz-icon nzType="bar-chart"></span>
-            Dnevni izveštaj
           </li>
           <li nz-menu-item routerLink="/bank-statements/import">
             <span nz-icon nzType="bank"></span>
